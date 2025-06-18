@@ -4,6 +4,7 @@ function App() {
   const [users, setUsers] = useState([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [page, setPage] = useState(1);
   const [filters, setFilters] = useState({
     companyid: '',
@@ -14,34 +15,62 @@ function App() {
   const fetchUsers = useCallback(async () => {
     try {
       setLoading(true);
+      setError(null);
+      console.log('Iniciando busca de usuários...');
+      
       const queryParams = new URLSearchParams({
         page,
         limit: 10,
         ...filters
       });
 
-      const response = await fetch(`/api/users?${queryParams}`);
-      const data = await response.json();
+      const apiUrl = `/api/users?${queryParams}`;
+      console.log('Fazendo requisição para:', apiUrl);
 
-      setUsers(data.users);
-      setTotal(data.total);
+      const response = await fetch(apiUrl);
+      console.log('Status da resposta:', response.status);
+      
+      if (!response.ok) {
+        throw new Error(`Erro na API: ${response.status} - ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      console.log('Dados recebidos:', data);
+
+      setUsers(data.users || []);
+      setTotal(data.total || 0);
     } catch (error) {
       console.error('Erro ao buscar usuários:', error);
+      setError(error.message);
     } finally {
       setLoading(false);
     }
   }, [page, filters]);
 
   useEffect(() => {
+    console.log('App montado/atualizado');
     fetchUsers();
   }, [fetchUsers]);
 
   const handleFilterChange = (name, value) => {
+    console.log('Filtro alterado:', name, value);
     setFilters(prev => ({ ...prev, [name]: value }));
     setPage(1);
   };
 
   const totalPages = Math.ceil(total / 10);
+
+  if (error) {
+    return (
+      <div className="container">
+        <h1>Erro</h1>
+        <div style={{ color: 'red', margin: '20px 0' }}>
+          {error}
+        </div>
+        <button onClick={fetchUsers}>Tentar Novamente</button>
+      </div>
+    );
+  }
 
   return (
     <div className="container">
@@ -83,6 +112,10 @@ function App() {
 
       {loading ? (
         <div className="loader"></div>
+      ) : users.length === 0 ? (
+        <div style={{ textAlign: 'center', margin: '20px 0' }}>
+          Nenhum usuário encontrado.
+        </div>
       ) : (
         <>
           <div className="table-container">

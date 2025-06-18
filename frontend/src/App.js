@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 
 function App() {
   const [users, setUsers] = useState([]);
@@ -11,7 +11,7 @@ function App() {
     search: ''
   });
 
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
     try {
       setLoading(true);
       const queryParams = new URLSearchParams({
@@ -20,7 +20,7 @@ function App() {
         ...filters
       });
 
-      const response = await fetch(`http://localhost:3001/users?${queryParams}`);
+      const response = await fetch(`/api/users?${queryParams}`);
       const data = await response.json();
 
       setUsers(data.users);
@@ -30,11 +30,11 @@ function App() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [page, filters]);
 
   useEffect(() => {
     fetchUsers();
-  }, [page, filters]);
+  }, [fetchUsers]);
 
   const handleFilterChange = (name, value) => {
     setFilters(prev => ({ ...prev, [name]: value }));

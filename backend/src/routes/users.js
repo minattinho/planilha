@@ -16,42 +16,57 @@ router.get('/', async (req, res) => {
     
     let conditions = [];
     let params = [];
+    let paramCount = 1;
 
     if (companyid) {
-      conditions.push('companyid = ?');
+      conditions.push(`companyid = $${paramCount}`);
       params.push(companyid);
+      paramCount++;
     }
 
     if (active !== undefined) {
-      conditions.push('active = ?');
-      params.push(active === 'true' ? 1 : 0);
+      conditions.push(`active = $${paramCount}`);
+      params.push(active === 'true');
+      paramCount++;
     }
 
     if (search) {
-      conditions.push('(name LIKE ? OR email LIKE ?)');
-      params.push(`%${search}%`, `%${search}%`);
+      conditions.push(`(name ILIKE $${paramCount} OR email ILIKE $${paramCount})`);
+      params.push(`%${search}%`);
+      paramCount++;
     }
 
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
     // Query para contar total de registros
-    const [countResult] = await pool.execute(
-      `SELECT COUNT(*) as total FROM users ${whereClause}`,
-      params
-    );
+    const countQuery = `
+      SELECT COUNT(*) as total 
+      FROM "user" 
+      ${whereClause}
+    `;
+    
+    const countResult = await pool.query(countQuery, params);
+    const total = parseInt(countResult.rows[0].total);
 
     // Query para buscar usuários com paginação
-    const [users] = await pool.execute(
-      `SELECT id, id_user, createdat, updateat, companyid, name, shortName, 
-       email, phoneNumberFormatted, profile, clienteName, active 
-       FROM users ${whereClause} 
-       LIMIT ? OFFSET ?`,
-      [...params, parseInt(limit), parseInt(offset)]
+    const usersQuery = `
+      SELECT id, id_user, createdat, updateat, companyid, name, 
+             "shortName", email, "phoneNumberFormatted", profile, 
+             "clienteName", active 
+      FROM "user" 
+      ${whereClause}
+      LIMIT $${paramCount} 
+      OFFSET $${paramCount + 1}
+    `;
+
+    const usersResult = await pool.query(
+      usersQuery,
+      [...params, limit, offset]
     );
 
     res.json({
-      users,
-      total: countResult[0].total
+      users: usersResult.rows,
+      total
     });
 
   } catch (error) {

@@ -9,7 +9,7 @@ app.use(cors());
 app.use(express.json());
 
 // Rotas
-app.use('/users', usersRoutes);
+app.use('/api/users', usersRoutes);
 
 app.listen(PORT, () => {
   console.log(`Servidor rodando na porta ${PORT}`);

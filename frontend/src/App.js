@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { supabase } from './config/supabase';
 
 function App() {
   const [users, setUsers] = useState([]);
@@ -18,27 +19,38 @@ function App() {
       setError(null);
       console.log('Iniciando busca de usuários...');
       
-      const queryParams = new URLSearchParams({
-        page,
-        limit: 10,
-        ...filters
-      });
+      const limit = 10;
+      const offset = (page - 1) * limit;
 
-      const apiUrl = `/api/users?${queryParams}`;
-      console.log('Fazendo requisição para:', apiUrl);
+      // Iniciando a query do Supabase
+      let query = supabase
+        .from('user')
+        .select('*', { count: 'exact' });
 
-      const response = await fetch(apiUrl);
-      console.log('Status da resposta:', response.status);
-      
-      if (!response.ok) {
-        throw new Error(`Erro na API: ${response.status} - ${response.statusText}`);
+      // Aplicando filtros
+      if (filters.companyid) {
+        query = query.eq('companyid', filters.companyid);
       }
 
-      const data = await response.json();
-      console.log('Dados recebidos:', data);
+      if (filters.active !== '') {
+        query = query.eq('active', filters.active === 'true');
+      }
 
-      setUsers(data.users || []);
-      setTotal(data.total || 0);
+      if (filters.search) {
+        query = query.or(`name.ilike.%${filters.search}%,email.ilike.%${filters.search}%`);
+      }
+
+      // Aplicando paginação e ordenação
+      const { data, count, error } = await query
+        .range(offset, offset + limit - 1)
+        .order('id');
+
+      if (error) throw error;
+
+      console.log('Dados recebidos:', { data, count });
+
+      setUsers(data || []);
+      setTotal(count || 0);
     } catch (error) {
       console.error('Erro ao buscar usuários:', error);
       setError(error.message);

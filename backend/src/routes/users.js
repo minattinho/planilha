@@ -1,6 +1,7 @@
-const express = require('express');
+import express from 'express';
+import supabase from '../config/database.js';
+
 const router = express.Router();
-const pool = require('../config/database');
 
 router.get('/', async (req, res) => {
   try {
@@ -14,61 +15,35 @@ router.get('/', async (req, res) => {
 
     const offset = (page - 1) * limit;
     
-    let conditions = [];
-    let params = [];
-    let paramCount = 1;
+    // Iniciando a query do Supabase
+    let query = supabase
+      .from('user')
+      .select('*', { count: 'exact' });
 
+    // Aplicando os filtros
     if (companyid) {
-      conditions.push(`companyid = $${paramCount}`);
-      params.push(companyid);
-      paramCount++;
+      query = query.eq('companyid', companyid);
     }
 
     if (active !== undefined) {
-      conditions.push(`active = $${paramCount}`);
-      params.push(active === 'true');
-      paramCount++;
+      query = query.eq('active', active === 'true');
     }
 
     if (search) {
-      conditions.push(`(name ILIKE $${paramCount} OR email ILIKE $${paramCount})`);
-      params.push(`%${search}%`);
-      paramCount++;
+      query = query.or(`name.ilike.%${search}%,email.ilike.%${search}%`);
     }
 
-    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+    // Aplicando paginação
+    const { data: users, count: total, error } = await query
+      .range(offset, offset + limit - 1)
+      .order('id');
 
-    // Testa a conexão com o banco antes de executar as queries
-    await pool.query('SELECT 1');
-
-    // Query para contar total de registros
-    const countQuery = `
-      SELECT COUNT(*) as total 
-      FROM "user" 
-      ${whereClause}
-    `;
-    
-    const countResult = await pool.query(countQuery, params);
-    const total = parseInt(countResult.rows[0].total);
-
-    // Query para buscar usuários com paginação
-    const usersQuery = `
-      SELECT id, id_user, createdat, updateat, companyid, name, 
-             "shortName", email, "phoneNumberFormatted", profile, 
-             "clienteName", active 
-      FROM "user" 
-      ${whereClause}
-      LIMIT $${paramCount} 
-      OFFSET $${paramCount + 1}
-    `;
-
-    const usersResult = await pool.query(
-      usersQuery,
-      [...params, limit, offset]
-    );
+    if (error) {
+      throw error;
+    }
 
     res.json({
-      users: usersResult.rows,
+      users,
       total,
       page: parseInt(page),
       limit: parseInt(limit)
@@ -77,14 +52,14 @@ router.get('/', async (req, res) => {
   } catch (error) {
     console.error('Erro ao buscar usuários:', error);
     
-    if (error.code === 'ECONNREFUSED') {
+    if (error.code === 'PGRST301') {
       return res.status(500).json({ 
         error: 'Erro de conexão com o banco de dados',
-        details: 'Não foi possível conectar ao banco de dados. Verifique as configurações de conexão.'
+        details: 'Não foi possível conectar ao Supabase. Verifique as configurações de conexão.'
       });
     }
     
-    if (error.code === '42P01') {
+    if (error.code === 'PGRST204') {
       return res.status(500).json({ 
         error: 'Erro na estrutura do banco de dados',
         details: 'A tabela "user" não foi encontrada. Verifique se o banco de dados está corretamente configurado.'
@@ -98,4 +73,4 @@ router.get('/', async (req, res) => {
   }
 });
 
-module.exports = router; 
+export default router; 

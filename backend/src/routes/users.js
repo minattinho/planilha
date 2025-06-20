@@ -38,6 +38,9 @@ router.get('/', async (req, res) => {
 
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
+    // Testa a conexão com o banco antes de executar as queries
+    await pool.query('SELECT 1');
+
     // Query para contar total de registros
     const countQuery = `
       SELECT COUNT(*) as total 
@@ -66,12 +69,32 @@ router.get('/', async (req, res) => {
 
     res.json({
       users: usersResult.rows,
-      total
+      total,
+      page: parseInt(page),
+      limit: parseInt(limit)
     });
 
   } catch (error) {
     console.error('Erro ao buscar usuários:', error);
-    res.status(500).json({ error: 'Erro interno do servidor' });
+    
+    if (error.code === 'ECONNREFUSED') {
+      return res.status(500).json({ 
+        error: 'Erro de conexão com o banco de dados',
+        details: 'Não foi possível conectar ao banco de dados. Verifique as configurações de conexão.'
+      });
+    }
+    
+    if (error.code === '42P01') {
+      return res.status(500).json({ 
+        error: 'Erro na estrutura do banco de dados',
+        details: 'A tabela "user" não foi encontrada. Verifique se o banco de dados está corretamente configurado.'
+      });
+    }
+
+    res.status(500).json({ 
+      error: 'Erro interno do servidor',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 });
 
